@@ -1,0 +1,180 @@
+{% extends "tracker/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="row">
+    <!-- Income and Savings Summary -->
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Financial Overview</h5>
+                <a href="{% url 'tracker:add_income' %}" class="btn btn-success btn-sm">
+                    <i class="bi bi-plus"></i> Add Income
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6>Monthly Income</h6>
+                    <h3>₹{{ monthly_income|floatformat:2 }}</h3>
+                </div>
+                <div class="mb-3">
+                    <h6>Total Expenses</h6>
+                    <h3>₹{{ total_expenses|floatformat:2 }}</h3>
+                </div>
+                <div>
+                    <h6>Savings Rate</h6>
+                    <h3>{{ savings_rate }}%</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expense Categories -->
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Expense Categories</h5>
+                <a href="{% url 'tracker:add_expense' %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus"></i> Add Expense
+                </a>
+            </div>
+            <div class="card-body">
+                {% if category_totals %}
+                <div id="expense-chart" class="mb-4" style="height: 300px;"></div>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Amount</th>
+                                <th>% of Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for category in category_totals %}
+                            <tr>
+                                <td>{{ category.name }}</td>
+                                <td>₹{{ category.total|floatformat:2 }}</td>
+                                <td>{{ category.percentage|floatformat:1 }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-center">No expenses recorded this month.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Budget Predictions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Budget Predictions</h5>
+            </div>
+            <div class="card-body">
+                <div id="prediction-chart" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tax Deductions -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Tax Deductions</h5>
+                <a href="{% url 'tracker:tax_deductions' %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-receipt"></i> Manage Deductions
+                </a>
+            </div>
+            <div class="card-body">
+                {% if tax_deductions %}
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Date Claimed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for deduction in tax_deductions %}
+                            <tr>
+                                <td>{{ deduction.deduction_category.name }}</td>
+                                <td>₹{{ deduction.amount|floatformat:2 }}</td>
+                                <td>
+                                    <span class="badge {% if deduction.verification_status == 'verified' %}bg-success{% elif deduction.verification_status == 'rejected' %}bg-danger{% else %}bg-warning{% endif %}">
+                                        {{ deduction.verification_status|title }}
+                                    </span>
+                                </td>
+                                <td>{{ deduction.date_claimed }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th>Total Deductions</th>
+                                <th colspan="3">₹{{ total_deductions|floatformat:2 }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-center">No tax deductions recorded for this fiscal year.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if category_totals %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+    // Expense Chart
+    const expenseData = {
+        values: [{% for category in category_totals %}'{{ category.total }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+        labels: [{% for category in category_totals %}'{{ category.name }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+        type: 'pie'
+    };
+    
+    Plotly.newPlot('expense-chart', [expenseData], {
+        margin: { t: 0, b: 0, l: 0, r: 0 },
+        showlegend: true,
+        legend: { orientation: 'h' }
+    });
+
+    // Prediction Chart
+    const predictionData = {
+        x: {{ prediction_months|safe }},
+        y: {{ predicted_amounts|safe }},
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'Predicted Expenses'
+    };
+
+    const actualData = {
+        x: {{ actual_months|safe }},
+        y: {{ actual_amounts|safe }},
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'Actual Expenses'
+    };
+
+    Plotly.newPlot('prediction-chart', [actualData, predictionData], {
+        margin: { t: 20, b: 40, l: 60, r: 20 },
+        yaxis: { title: 'Amount (₹)' },
+        xaxis: { title: 'Month' },
+        showlegend: true,
+        legend: { orientation: 'h' }
+    });
+</script>
+{% endif %}
+{% endblock %} 

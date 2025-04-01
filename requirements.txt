@@ -1,0 +1,11 @@
+Django>=5.0.2  # Core web framework
+crispy-bootstrap5>=2024.2  # Bootstrap 5 form styling
+django-crispy-forms>=2.1  # Form handling
+Pillow>=10.2.0  # For handling uploaded documents
+python-dotenv>=1.0.1
+whitenoise>=6.6.0  # For static files in production
+gunicorn>=21.2.0  # For production deployment
+dj-database-url>=2.1.0  # For database configuration
+pandas>=2.2.0  # For data analysis
+plotly>=5.18.0  # For interactive charts
+scikit-learn>=1.4.0  # For budget predictions 

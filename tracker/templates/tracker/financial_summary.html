@@ -1,0 +1,46 @@
+{% extends "tracker/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Monthly Financial Summary</h5>
+            </div>
+            <div class="card-body">
+                {% if monthly_totals %}
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Total Expenses</th>
+                                <th>Category Breakdown</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for month, data in monthly_totals.items %}
+                            <tr>
+                                <td>{{ month }}</td>
+                                <td>₹{{ data.total|floatformat:2 }}</td>
+                                <td>
+                                    <ul class="list-unstyled mb-0">
+                                        {% for category, amount in data.categories.items %}
+                                        <li>{{ category }}: ₹{{ amount|floatformat:2 }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-center">No financial data available for the past 12 months.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

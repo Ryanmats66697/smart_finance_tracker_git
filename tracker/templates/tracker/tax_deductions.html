@@ -1,0 +1,126 @@
+{% extends "tracker/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="row">
+    <!-- Tax Profile Summary -->
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Tax Profile</h5>
+            </div>
+            <div class="card-body">
+                {% if tax_profile %}
+                <dl class="row mb-0">
+                    <dt class="col-sm-5">Tax Regime</dt>
+                    <dd class="col-sm-7">{{ tax_profile.get_tax_regime_display }}</dd>
+                    
+                    <dt class="col-sm-5">PAN Number</dt>
+                    <dd class="col-sm-7">{{ tax_profile.pan_number }}</dd>
+                    
+                    <dt class="col-sm-5">Senior Citizen</dt>
+                    <dd class="col-sm-7">{% if tax_profile.is_senior_citizen %}Yes{% else %}No{% endif %}</dd>
+                </dl>
+                {% else %}
+                <p class="text-center mb-0">
+                    <a href="{% url 'tracker:tax_profile' %}" class="btn btn-primary">Set Up Tax Profile</a>
+                </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Add New Deduction -->
+    <div class="col-md-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Add Tax Deduction</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    {{ form|crispy }}
+                    <button type="submit" class="btn btn-primary">Add Deduction</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tax Sections -->
+<div class="row">
+    {% for section in sections %}
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">{{ section.section_code }} - {{ section.name }}</h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">{{ section.description }}</p>
+                <p class="card-text">
+                    <small class="text-muted">
+                        Maximum Limit: ₹{{ section.max_limit|floatformat:2 }}<br>
+                        Applicable in: 
+                        {% if section.applicable_old_regime %}Old Regime{% endif %}
+                        {% if section.applicable_old_regime and section.applicable_new_regime %} & {% endif %}
+                        {% if section.applicable_new_regime %}New Regime{% endif %}
+                    </small>
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Deductions List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Your Tax Deductions</h5>
+            </div>
+            <div class="card-body">
+                {% if deductions %}
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Amount</th>
+                                <th>Fiscal Year</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for deduction in deductions %}
+                            <tr>
+                                <td>{{ deduction.deduction_category.name }}</td>
+                                <td>₹{{ deduction.amount|floatformat:2 }}</td>
+                                <td>{{ deduction.fiscal_year }}</td>
+                                <td>
+                                    <span class="badge {% if deduction.verification_status == 'verified' %}bg-success{% elif deduction.verification_status == 'rejected' %}bg-danger{% else %}bg-warning{% endif %}">
+                                        {{ deduction.verification_status|title }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="{% url 'tracker:edit_tax_deduction' deduction.id %}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{% url 'tracker:delete_tax_deduction' deduction.id %}" class="btn btn-sm btn-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-center">No tax deductions recorded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
