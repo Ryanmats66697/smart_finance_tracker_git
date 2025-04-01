@@ -40,7 +40,9 @@
             </div>
             <div class="card-body">
                 {% if category_totals %}
-                <div id="expense-chart" class="mb-4" style="height: 300px;"></div>
+                <div class="mb-4" style="height: 300px;">
+                    <canvas id="expense-chart"></canvas>
+                </div>
                 <div class="table-responsive">
                     <table class="table">
                         <thead>
@@ -130,7 +132,9 @@
                 <span class="badge bg-primary">Next 3 Months</span>
             </div>
             <div class="card-body">
-                <div id="prediction-chart" style="height: 300px;"></div>
+                <!--<div style="height: 300px;">
+                    <canvas id="prediction-chart"></canvas>
+                </div> -->
                 {% if predictions %}
                 <div class="table-responsive mt-4">
                     <table class="table">
@@ -224,45 +228,116 @@
 </div>
 
 {% if category_totals %}
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<!-- Include Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script>
-    // Expense Chart
-    const expenseData = {
-        values: [{% for category in category_totals %}'{{ category.total }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
-        labels: [{% for category in category_totals %}'{{ category.name }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
-        type: 'pie'
-    };
-    
-    Plotly.newPlot('expense-chart', [expenseData], {
-        margin: { t: 0, b: 0, l: 0, r: 0 },
-        showlegend: true,
-        legend: { orientation: 'h' }
+    // Get the theme mode
+    const isDarkMode = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    const textColor = isDarkMode ? '#fff' : '#000';
+    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+
+    // Expense Chart (Pie)
+    const expenseCtx = document.getElementById('expense-chart').getContext('2d');
+    new Chart(expenseCtx, {
+        type: 'doughnut',
+        data: {
+            labels: [{% for category in category_totals %}'{{ category.name }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+            datasets: [{
+                data: [{% for category in category_totals %}{{ category.total }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                backgroundColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF',
+                    '#FF9F40',
+                    '#FF6384',
+                    '#36A2EB'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: textColor,
+                        padding: 20
+                    }
+                }
+            }
+        }
     });
 
-    // Prediction Chart
-    const predictionData = {
-        x: {{ prediction_months|safe }},
-        y: {{ predicted_amounts|safe }},
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: 'Predicted Expenses',
-        line: { dash: 'dot' }
-    };
-
-    const actualData = {
-        x: {{ actual_months|safe }},
-        y: {{ actual_amounts|safe }},
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: 'Actual Expenses'
-    };
-
-    Plotly.newPlot('prediction-chart', [actualData, predictionData], {
-        margin: { t: 20, b: 40, l: 60, r: 20 },
-        yaxis: { title: 'Amount (₹)' },
-        xaxis: { title: 'Month' },
-        showlegend: true,
-        legend: { orientation: 'h' }
+    // Prediction Chart (Line)
+    const predictionCtx = document.getElementById('prediction-chart').getContext('2d');
+    new Chart(predictionCtx, {
+        type: 'line',
+        data: {
+            labels: {{ prediction_months|safe }},
+            datasets: [{
+                label: 'Actual Expenses',
+                data: {{ actual_amounts|safe }},
+                borderColor: '#36A2EB',
+                backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                fill: true
+            }, {
+                label: 'Predicted Expenses',
+                data: Array({{ actual_amounts|length }}).fill(null).concat({{ predicted_amounts|safe }}),
+                borderColor: '#FF6384',
+                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                borderDash: [5, 5],
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        color: textColor
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ₹' + context.parsed.y.toFixed(2);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        color: gridColor
+                    },
+                    ticks: {
+                        color: textColor
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: gridColor
+                    },
+                    ticks: {
+                        color: textColor,
+                        callback: function(value) {
+                            return '₹' + value.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
     });
 </script>
 {% endif %}
