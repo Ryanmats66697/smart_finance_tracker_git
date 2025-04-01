@@ -114,7 +114,7 @@ def dashboard(request):
 @login_required
 def add_expense(request):
     if request.method == 'POST':
-        form = ExpenseForm(request.POST)
+        form = ExpenseForm(request.POST, user=request.user)
         if form.is_valid():
             expense = form.save(commit=False)
             expense.user = request.user
@@ -122,7 +122,7 @@ def add_expense(request):
             messages.success(request, 'Expense added successfully.')
             return redirect('tracker:dashboard')
     else:
-        form = ExpenseForm()
+        form = ExpenseForm(user=request.user)
     
     return render(request, 'tracker/add_expense.html', {'form': form})
 
@@ -148,11 +148,22 @@ def add_income(request):
         if form.is_valid():
             income = form.save(commit=False)
             income.user = request.user
+            
+            # Update user's monthly income in UserProfile
+            try:
+                profile = UserProfile.objects.get(user=request.user)
+                if income.source == 'Monthly Salary':  # If it's a salary entry
+                    profile.monthly_income = income.amount
+                    profile.save()
+            except UserProfile.DoesNotExist:
+                pass
+                
             income.save()
             messages.success(request, 'Income added successfully.')
             return redirect('tracker:dashboard')
     else:
-        form = IncomeForm()
+        initial_data = {'source': 'Monthly Salary'}  # Default source
+        form = IncomeForm(initial=initial_data)
     
     return render(request, 'tracker/add_income.html', {'form': form})
 
