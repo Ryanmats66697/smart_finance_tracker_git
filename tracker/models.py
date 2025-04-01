@@ -54,12 +54,44 @@ class BudgetPrediction(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
     predicted_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    month = models.IntegerField(default=1)  # Default to January
-    year = models.IntegerField(default=2024)  # Default to current year
+    month = models.IntegerField(default=1)
+    year = models.IntegerField(default=2024)
+    confidence_score = models.DecimalField(max_digits=5, decimal_places=2, default=0.0)  # Prediction confidence
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.category.name} - ₹{self.predicted_amount:,.2f} ({self.month}/{self.year})"
+
+class BudgetRecommendation(models.Model):
+    RECOMMENDATION_TYPES = [
+        ('reduce', 'Reduce Spending'),
+        ('maintain', 'Maintain Current'),
+        ('reallocate', 'Reallocate Budget'),
+        ('save', 'Saving Opportunity'),
+    ]
+    
+    PRIORITY_LEVELS = [
+        ('high', 'High Priority'),
+        ('medium', 'Medium Priority'),
+        ('low', 'Low Priority'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    recommendation_type = models.CharField(max_length=20, choices=RECOMMENDATION_TYPES)
+    priority = models.CharField(max_length=10, choices=PRIORITY_LEVELS)
+    current_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    recommended_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    potential_savings = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    implemented = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.category.name} - {self.recommendation_type} (₹{self.potential_savings:,.2f} savings)"
+
+    class Meta:
+        ordering = ['-potential_savings']
 
 class TaxRegime(models.Model):
     name = models.CharField(max_length=50)  # 'Old' or 'New'

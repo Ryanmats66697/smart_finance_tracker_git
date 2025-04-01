@@ -9,12 +9,14 @@ import random
 from decimal import Decimal
 from .models import (
     Category, Expense, BudgetPrediction, UserProfile, Income,
-    TaxDeduction, DeductionCategory, UserTaxProfile, DeductionSection
+    TaxDeduction, DeductionCategory, UserTaxProfile, DeductionSection,
+    BudgetRecommendation
 )
 from .forms import (
     ExpenseForm, CategoryForm, UserRegistrationForm, UserProfileForm,
     IncomeForm, TaxDeductionForm, UserTaxProfileForm
 )
+from .services.budget_analysis import BudgetAnalyzer
 
 @login_required
 def dashboard(request):
@@ -54,20 +56,30 @@ def dashboard(request):
                 'percentage': (total / total_expenses * 100) if total_expenses > 0 else Decimal('0')
             })
 
-    # Get tax deductions
-    tax_deductions = TaxDeduction.objects.filter(
-        user=request.user,
-        fiscal_year=f"{today.year}-{str(today.year + 1)[2:]}"
-    ).select_related('deduction_category')
-    total_deductions = tax_deductions.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    # Run budget analysis and get recommendations
+    analyzer = BudgetAnalyzer(request.user)
+    analyzer.predict_future_expenses()
+    analyzer.generate_recommendations()
 
-    # Get historical data for predictions
-    last_6_months = []
-    actual_amounts = []
+    # Get predictions and recommendations
+    predictions = BudgetPrediction.objects.filter(
+        user=request.user,
+        month__gt=today.month,
+        year=today.year
+    ).select_related('category').order_by('year', 'month')
+
+    recommendations = BudgetRecommendation.objects.filter(
+        user=request.user,
+        implemented=False
+    ).select_related('category').order_by('priority', '-potential_savings')[:5]  # Top 5 recommendations
+
+    # Prepare prediction data for charts
     prediction_months = []
     predicted_amounts = []
+    actual_amounts = []
     
-    for i in range(5, -1, -1):  # Last 6 months
+    # Last 6 months actual data
+    for i in range(5, -1, -1):
         date = today - timedelta(days=i*30)
         month_expenses = Expense.objects.filter(
             user=request.user,
@@ -75,39 +87,26 @@ def dashboard(request):
             date__month=date.month
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
         
-        last_6_months.append(month_expenses)
-        actual_amounts.append(float(month_expenses))  # Convert to float for JSON serialization
+        actual_amounts.append(float(month_expenses))
         prediction_months.append(date.strftime('%B %Y'))
 
-    # Calculate predictions for next 3 months
-    for i in range(1, 4):
-        date = today + timedelta(days=i*30)
-        prediction_months.append(date.strftime('%B %Y'))
-        
-        # Simple prediction based on average and trend
-        avg_expense = sum(last_6_months) / Decimal('6')
-        trend = (last_6_months[-1] - last_6_months[0]) / Decimal('5')  # Change per month
-        
-        # Predict next month's expense
-        prediction = avg_expense + (trend * Decimal(str(i)))
-        
-        # Add some randomness for variable expenses (convert to Decimal)
-        random_factor = Decimal(str(1 + random.uniform(-0.05, 0.05)))
-        prediction = prediction * random_factor
-        
-        predicted_amounts.append(float(round(prediction, 2)))  # Convert to float for JSON serialization
+    # Next 3 months predictions
+    for prediction in predictions:
+        month_name = calendar.month_name[prediction.month]
+        prediction_months.append(f"{month_name} {prediction.year}")
+        predicted_amounts.append(float(prediction.predicted_amount))
 
     context = {
         'monthly_income': monthly_income,
         'total_expenses': total_expenses,
         'savings_rate': round(savings_rate, 1),
         'category_totals': category_totals,
-        'tax_deductions': tax_deductions,
-        'total_deductions': total_deductions,
         'prediction_months': prediction_months,
         'predicted_amounts': predicted_amounts,
         'actual_months': prediction_months[:6],
         'actual_amounts': actual_amounts,
+        'recommendations': recommendations,
+        'predictions': predictions,
     }
     return render(request, 'tracker/dashboard.html', context)
 
