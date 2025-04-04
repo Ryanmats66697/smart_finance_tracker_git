@@ -20,4 +20,5 @@ urlpatterns = [
     path('income/<int:income_id>/delete/', views.delete_income, name='delete_income'),
     path('tax-deductions/<int:deduction_id>/edit/', views.edit_tax_deduction, name='edit_tax_deduction'),
     path('tax-deductions/<int:deduction_id>/delete/', views.delete_tax_deduction, name='delete_tax_deduction'),
+    path('get-monthly-data/', views.get_monthly_data, name='get_monthly_data'),
 ] 
