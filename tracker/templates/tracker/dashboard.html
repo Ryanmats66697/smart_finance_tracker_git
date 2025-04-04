@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block content %}
+
 <div class="row">
     <!-- Income and Savings Summary -->
     <div class="col-md-4">
@@ -32,11 +33,27 @@
     <!-- Expense Categories -->
     <div class="col-md-8">
         <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">Expense Categories</h5>
-                <a href="{% url 'tracker:add_expense' %}" class="btn btn-primary btn-sm">
-                    <i class="bi bi-plus"></i> Add Expense
-                </a>
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="d-flex align-items-center gap-3">
+                        <h5 class="card-title mb-0">Expense Categories</h5>
+                        <!-- Month Navigation -->
+                        <div class="btn-group">
+                            <button class="btn btn-outline-primary btn-sm" id="prevMonth">
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+                            <button class="btn btn-outline-primary btn-sm" id="currentMonthDisplay" style="min-width: 130px;">
+                                Loading...
+                            </button>
+                            <button class="btn btn-outline-primary btn-sm" id="nextMonth">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <a href="{% url 'tracker:add_expense' %}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-plus"></i> Add Expense
+                    </a>
+                </div>
             </div>
             <div class="card-body">
                 {% if category_totals %}
@@ -341,4 +358,43 @@
     });
 </script>
 {% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                   'July', 'August', 'September', 'October', 'November', 'December'];
+    let currentDate = new Date();
+    let currentMonth = currentDate.getMonth();
+    let currentYear = currentDate.getFullYear();
+    
+    const prevMonthBtn = document.getElementById('prevMonth');
+    const nextMonthBtn = document.getElementById('nextMonth');
+    const currentMonthDisplay = document.getElementById('currentMonthDisplay');
+    
+    function updateMonthDisplay() {
+        currentMonthDisplay.textContent = `${months[currentMonth]} ${currentYear}`;
+    }
+    
+    prevMonthBtn.addEventListener('click', () => {
+        currentMonth--;
+        if (currentMonth < 0) {
+            currentMonth = 11;
+            currentYear--;
+        }
+        updateMonthDisplay();
+    });
+    
+    nextMonthBtn.addEventListener('click', () => {
+        currentMonth++;
+        if (currentMonth > 11) {
+            currentMonth = 0;
+            currentYear++;
+        }
+        updateMonthDisplay();
+    });
+    
+    // Initialize display
+    updateMonthDisplay();
+});
+</script>
 {% endblock %} 
