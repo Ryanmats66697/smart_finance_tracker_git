@@ -2,20 +2,32 @@
 {% load static %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Monthly Financial Summary</h5>
-            </div>
+<div class="container mt-4">
+    <h2 class="mb-4">Financial Summary</h2>
+    
+    {% if monthly_totals %}
+        <!-- Line Graph -->
+        <div class="card mb-4">
             <div class="card-body">
-                {% if monthly_totals %}
+                <h5 class="card-title">Income vs Expenses Trend</h5>
+                <div style="height: 400px;">
+                    <canvas id="incomeExpenseChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Breakdown Table -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Monthly Breakdown</h5>
                 <div class="table-responsive">
-                    <table class="table">
+                    <table class="table table-striped">
                         <thead>
                             <tr>
                                 <th>Month</th>
+                                <th>Total Income</th>
                                 <th>Total Expenses</th>
+                                <th>Net Income</th>
                                 <th>Category Breakdown</th>
                             </tr>
                         </thead>
@@ -23,7 +35,9 @@
                             {% for month, data in monthly_totals.items %}
                             <tr>
                                 <td>{{ month }}</td>
-                                <td>₹{{ data.total|floatformat:2 }}</td>
+                                <td>₹{{ data.total_income|floatformat:2 }}</td>
+                                <td>₹{{ data.total_expenses|floatformat:2 }}</td>
+                                <td>₹{{ data.net_income|floatformat:2 }}</td>
                                 <td>
                                     <ul class="list-unstyled mb-0">
                                         {% for category, amount in data.categories.items %}
@@ -36,11 +50,109 @@
                         </tbody>
                     </table>
                 </div>
-                {% else %}
-                <p class="text-center">No financial data available for the past 12 months.</p>
-                {% endif %}
             </div>
         </div>
-    </div>
+    {% else %}
+        <div class="alert alert-info">
+            No financial data available for the past 12 months.
+        </div>
+    {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Wait for the DOM to be fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get the canvas element
+        const canvas = document.getElementById('incomeExpenseChart');
+        
+        // Get the data from Django template variables (already in JSON format)
+        const monthLabels = {{ months|safe }};
+        const expenseValues = {{ expense_data|safe }};
+        const incomeValues = {{ income_data|safe }};
+        
+        // Create the chart
+        const chart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: monthLabels,
+                datasets: [
+                    {
+                        label: 'Income',
+                        data: incomeValues,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    },
+                    {
+                        label: 'Expenses',
+                        data: expenseValues,
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Monthly Income vs Expenses',
+                        font: {
+                            size: 16,
+                            weight: 'bold'
+                        }
+                    },
+                    legend: {
+                        position: 'top'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += '₹' + context.parsed.y.toLocaleString('en-IN', {
+                                        maximumFractionDigits: 2
+                                    });
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return '₹' + value.toLocaleString('en-IN', {
+                                    maximumFractionDigits: 2
+                                });
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
 {% endblock %} 

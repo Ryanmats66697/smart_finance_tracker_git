@@ -18,6 +18,7 @@ from .forms import (
 )
 from .services.budget_analysis import BudgetAnalyzer
 from django.http import JsonResponse
+import json
 
 @login_required
 def dashboard(request):
@@ -170,32 +171,86 @@ def add_income(request):
 
 @login_required
 def financial_summary(request):
-    # Get expenses for the last 12 months
-    end_date = timezone.now()
+    """View for displaying financial summary including income and expenses for the last 12 months."""
+    # Get the date range for the last 12 months
+    end_date = timezone.now().date()
     start_date = end_date - timedelta(days=365)
     
+    # Get expenses for the last 12 months
     expenses = Expense.objects.filter(
         user=request.user,
         date__range=[start_date, end_date]
     ).select_related('category')
     
-    # Calculate monthly totals
+    # Get income for the last 12 months
+    income = Income.objects.filter(
+        user=request.user,
+        date__range=[start_date, end_date]
+    )
+    
+    # Initialize monthly totals dictionary
     monthly_totals = {}
+    
+    # Process expenses
     for expense in expenses:
-        month_key = expense.date.strftime('%Y-%m')
+        month_key = expense.date.strftime('%B %Y')
         if month_key not in monthly_totals:
-            monthly_totals[month_key] = {'total': 0, 'categories': {}}
-        monthly_totals[month_key]['total'] += expense.amount
+            monthly_totals[month_key] = {
+                'total_expenses': 0,
+                'total_income': 0,
+                'net_income': 0,
+                'categories': {}
+            }
         
-        # Track category totals
-        cat_name = expense.category.name
-        if cat_name not in monthly_totals[month_key]['categories']:
-            monthly_totals[month_key]['categories'][cat_name] = 0
-        monthly_totals[month_key]['categories'][cat_name] += expense.amount
+        monthly_totals[month_key]['total_expenses'] += expense.amount
+        category_name = expense.category.name
+        if category_name not in monthly_totals[month_key]['categories']:
+            monthly_totals[month_key]['categories'][category_name] = 0
+        monthly_totals[month_key]['categories'][category_name] += expense.amount
+    
+    # Process income
+    for income_item in income:
+        month_key = income_item.date.strftime('%B %Y')
+        if month_key not in monthly_totals:
+            monthly_totals[month_key] = {
+                'total_expenses': 0,
+                'total_income': 0,
+                'net_income': 0,
+                'categories': {}
+            }
+        
+        monthly_totals[month_key]['total_income'] += income_item.amount
+    
+    # Calculate net income for each month
+    for month_data in monthly_totals.values():
+        month_data['net_income'] = month_data['total_income'] - month_data['total_expenses']
+    
+    # Sort months chronologically
+    sorted_months = sorted(monthly_totals.keys(), 
+                         key=lambda x: datetime.strptime(x, '%B %Y'))
+    
+    # Prepare data for the line graph
+    months = []
+    expense_data = []
+    income_data = []
+    
+    for month in sorted_months:
+        months.append(month)
+        expense_data.append(float(monthly_totals[month]['total_expenses']))
+        income_data.append(float(monthly_totals[month]['total_income']))
+    
+    # Convert to JSON for JavaScript
+    months_json = json.dumps(months)
+    expense_data_json = json.dumps(expense_data)
+    income_data_json = json.dumps(income_data)
     
     context = {
         'monthly_totals': monthly_totals,
+        'months': months_json,
+        'expense_data': expense_data_json,
+        'income_data': income_data_json,
     }
+    
     return render(request, 'tracker/financial_summary.html', context)
 
 @login_required
