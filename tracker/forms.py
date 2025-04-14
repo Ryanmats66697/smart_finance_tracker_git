@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
+from django.utils import timezone
 from .models import (
     Category, Expense, UserProfile, Income,
     TaxDeduction, UserTaxProfile
@@ -41,6 +42,9 @@ class ExpenseForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if user:
             self.fields['category'].queryset = Category.objects.filter(user=user)
+        # Set default date to today if no date is provided
+        if not self.instance.pk and not self.data.get('date'):
+            self.fields['date'].initial = timezone.now().date()
 
     def clean_amount(self):
         amount = self.cleaned_data.get('amount')

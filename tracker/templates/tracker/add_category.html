@@ -1,5 +1,6 @@
 {% extends "tracker/base.html" %}
 {% load crispy_forms_tags %}
+{% load static %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -21,4 +22,8 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'tracker/js/form_handlers.js' %}"></script>
 {% endblock %} 
