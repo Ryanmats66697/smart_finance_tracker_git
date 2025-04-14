@@ -1,6 +1,6 @@
 from decimal import Decimal
 from datetime import datetime, timedelta
-from django.db.models import Avg, Sum, Count, StdDev
+from django.db.models import Avg, Sum, Count, StdDev, Min, Max
 from django.utils import timezone
 from ..models import Expense, Category, BudgetPrediction, BudgetRecommendation
 
@@ -9,6 +9,7 @@ class BudgetAnalyzer:
         self.user = user
         self.today = timezone.now()
         self.start_date = self.today - timedelta(days=180)  # Last 6 months
+        self.min_months_for_prediction = 3  # Minimum months of data required for predictions
 
     def get_category_statistics(self):
         """Calculate statistics for each expense category."""
@@ -23,6 +24,22 @@ class BudgetAnalyzer:
             )
             
             if expenses.exists():
+                # Get the date range of expenses
+                date_range = expenses.aggregate(
+                    min_date=Min('date'),
+                    max_date=Max('date')
+                )
+                
+                # Calculate the number of months between min and max date
+                if date_range['min_date'] and date_range['max_date']:
+                    months_diff = (date_range['max_date'].year - date_range['min_date'].year) * 12 + \
+                                 (date_range['max_date'].month - date_range['min_date'].month) + 1
+                else:
+                    months_diff = 1  # Default to 1 if we can't calculate
+                
+                # Ensure we have at least 1 month of data
+                months_diff = max(1, months_diff)
+                
                 avg = expenses.aggregate(Avg('amount'))['amount__avg']
                 total = expenses.aggregate(Sum('amount'))['amount__sum']
                 count = expenses.count()
@@ -34,7 +51,8 @@ class BudgetAnalyzer:
                     'total': total,
                     'frequency': count,
                     'std_dev': std_dev,
-                    'monthly_avg': total / 6  # 6 months
+                    'monthly_avg': total / months_diff,  # Use actual months of data
+                    'months_of_data': months_diff
                 }
         
         return stats
@@ -76,6 +94,10 @@ class BudgetAnalyzer:
         BudgetRecommendation.objects.filter(user=self.user).delete()
         
         for cat_id, data in stats.items():
+            # Only generate recommendations if we have enough data
+            if data['months_of_data'] < self.min_months_for_prediction:
+                continue
+                
             category = data['category']
             monthly_avg = data['monthly_avg']
             std_dev = data.get('std_dev', 0)
@@ -140,12 +162,20 @@ class BudgetAnalyzer:
         ).delete()
         
         for cat_id, data in stats.items():
+            # Only make predictions if we have enough data
+            if data['months_of_data'] < self.min_months_for_prediction:
+                continue
+                
             category = data['category']
             monthly_avg = data['monthly_avg']
             std_dev = data.get('std_dev', 0)
             
-            # Calculate confidence score based on data consistency
-            confidence = max(0, min(100, 100 - (std_dev / monthly_avg * 100))) if monthly_avg > 0 else 0
+            # Calculate confidence score based on data consistency and amount of data
+            data_confidence = min(100, (data['months_of_data'] / 6) * 100)  # Scale based on months of data
+            consistency_confidence = max(0, min(100, 100 - (std_dev / monthly_avg * 100))) if monthly_avg > 0 else 0
+            
+            # Overall confidence is the average of data amount and consistency
+            confidence = (data_confidence + consistency_confidence) / 2
             
             # Predict next 3 months
             for i in range(1, 4):
