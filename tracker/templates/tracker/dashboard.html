@@ -15,8 +15,8 @@
             </div>
             <div class="card-body" id="financial-overview">
                 <div class="mb-3">
-                    <h6>Monthly Income</h6>
-                    <h3 id="monthly-income">₹{{ monthly_income|floatformat:2 }}</h3>
+                    <h6>Total Income</h6>
+                    <h3 id="total-income">₹{{ monthly_income|floatformat:2 }}</h3>
                 </div>
                 <div class="mb-3">
                     <h6>Total Expenses</h6>
@@ -287,7 +287,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const formatCurrency = (amount) => `₹${parseFloat(amount).toFixed(2)}`;
                 
                 // Update Monthly Income
-                const monthlyIncomeElement = document.getElementById('monthly-income');
+                const monthlyIncomeElement = document.getElementById('total-income');
                 if (monthlyIncomeElement) {
                     monthlyIncomeElement.textContent = formatCurrency(data.monthly_income);
                 }

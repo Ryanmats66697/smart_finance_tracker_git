@@ -149,10 +149,10 @@ def add_income(request):
             income = form.save(commit=False)
             income.user = request.user
             
-            # Update user's monthly income in UserProfile
+            # Update user's monthly income in UserProfile if it's a salary entry
             try:
                 profile = UserProfile.objects.get(user=request.user)
-                if income.source == 'Monthly Salary':  # If it's a salary entry
+                if income.source == 'salary':  # If it's a salary entry
                     profile.monthly_income = income.amount
                     profile.save()
             except UserProfile.DoesNotExist:
@@ -162,7 +162,8 @@ def add_income(request):
             messages.success(request, 'Income added successfully.')
             return redirect('tracker:dashboard')
     else:
-        initial_data = {'source': 'Monthly Salary'}  # Default source
+        # Set default date to today
+        initial_data = {'date': timezone.now().date()}
         form = IncomeForm(initial=initial_data)
     
     return render(request, 'tracker/add_income.html', {'form': form})
@@ -364,75 +365,47 @@ def register(request):
 
 @login_required
 def get_monthly_data(request):
-    try:
-        # Get month and year from request parameters
-        month = request.GET.get('month')
-        year = request.GET.get('year')
-        
-        # Log the received parameters
-        print(f"Received request for month: {month}, year: {year}")
-        
-        # Validate parameters
-        if not month or not year:
-            return JsonResponse({'error': 'Month and year parameters are required'}, status=400)
-        
-        # Convert to integers
-        try:
-            month = int(month)
-            year = int(year)
-        except ValueError:
-            return JsonResponse({'error': 'Invalid month or year format'}, status=400)
-        
-        # Validate month range
-        if month < 1 or month > 12:
-            return JsonResponse({'error': 'Month must be between 1 and 12'}, status=400)
-        
-        # Get expenses for the specified month
-        monthly_expenses = Expense.objects.filter(
-            user=request.user,
-            date__year=year,
-            date__month=month
-        ).select_related('category')
-        
-        # Calculate total expenses
-        total_expenses = monthly_expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0')
-        
-        # Get user's income
-        try:
-            user_profile = UserProfile.objects.get(user=request.user)
-            monthly_income = user_profile.monthly_income
-        except UserProfile.DoesNotExist:
-            monthly_income = Decimal('0')
-        
-        # Calculate savings rate
-        if monthly_income > 0:
-            savings_rate = ((monthly_income - total_expenses) / monthly_income) * 100
-        else:
-            savings_rate = Decimal('0')
-        
-        # Get expense categories and their totals
-        categories = Category.objects.filter(user=request.user)
-        category_totals = []
-        for category in categories:
-            total = monthly_expenses.filter(category=category).aggregate(total=Sum('amount'))['total'] or Decimal('0')
-            if total > 0:  # Only include categories with expenses
-                category_totals.append({
-                    'name': category.name,
-                    'total': float(total),
-                    'percentage': float((total / total_expenses * 100) if total_expenses > 0 else Decimal('0'))
-                })
-        
-        # Log the response data
-        print(f"Returning data for {month}/{year}: {len(category_totals)} categories, total expenses: {total_expenses}")
-        
-        return JsonResponse({
-            'monthly_income': float(monthly_income),
-            'total_expenses': float(total_expenses),
-            'savings_rate': float(savings_rate),
-            'category_totals': category_totals
-        })
-    except Exception as e:
-        import traceback
-        print(f"Error in get_monthly_data: {str(e)}")
-        print(traceback.format_exc())
-        return JsonResponse({'error': str(e)}, status=500)
+    year = int(request.GET.get('year', timezone.now().year))
+    month = int(request.GET.get('month', timezone.now().month))
+    
+    # Get expenses for the selected month
+    expenses = Expense.objects.filter(
+        user=request.user,
+        date__year=year,
+        date__month=month
+    ).select_related('category')
+    
+    # Calculate total expenses
+    total_expenses = expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    
+    # Get income for the selected month
+    monthly_income = Income.objects.filter(
+        user=request.user,
+        date__year=year,
+        date__month=month
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    
+    # Calculate savings rate
+    if monthly_income > 0:
+        savings_rate = ((monthly_income - total_expenses) / monthly_income) * 100
+    else:
+        savings_rate = Decimal('0')
+    
+    # Get category totals
+    categories = Category.objects.filter(user=request.user)
+    category_totals = []
+    for category in categories:
+        total = expenses.filter(category=category).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        if total > 0:
+            category_totals.append({
+                'name': category.name,
+                'total': float(total),
+                'percentage': float((total / total_expenses * 100) if total_expenses > 0 else Decimal('0'))
+            })
+    
+    return JsonResponse({
+        'total_expenses': float(total_expenses),
+        'monthly_income': float(monthly_income),
+        'savings_rate': float(savings_rate),
+        'category_totals': category_totals
+    })

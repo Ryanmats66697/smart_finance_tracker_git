@@ -44,10 +44,15 @@ class ExpenseForm(forms.ModelForm):
 class IncomeForm(forms.ModelForm):
     class Meta:
         model = Income
-        fields = ['amount', 'date', 'source', 'description']
+        fields = ['source', 'amount', 'date', 'description']
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
             'description': forms.Textarea(attrs={'rows': 3}),
+            'source': forms.Select(attrs={'class': 'form-select'}),
+        }
+        help_texts = {
+            'source': 'Select the type of income you\'re adding.',
+            'description': 'Add any additional details about this income.',
         }
 
 class TaxDeductionForm(forms.ModelForm):

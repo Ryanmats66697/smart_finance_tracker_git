@@ -41,11 +41,23 @@ class Expense(models.Model):
         return f"{self.category.name} - ₹{self.amount:,.2f}"
 
 class Income(models.Model):
+    INCOME_SOURCE_CHOICES = [
+        ('salary', 'Monthly Salary'),
+        ('rental', 'Rental Income'),
+        ('interest', 'Interest Received'),
+        ('dividend', 'Dividend Income'),
+        ('freelance', 'Freelance Income'),
+        ('business', 'Business Income'),
+        ('investment', 'Investment Returns'),
+        ('gift', 'Gift Income'),
+        ('other', 'Other Income'),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     date = models.DateField()
     description = models.TextField(blank=True)
-    source = models.CharField(max_length=100)
+    source = models.CharField(max_length=100, choices=INCOME_SOURCE_CHOICES, default='salary')
 
     def __str__(self):
         return f"{self.user.username} - ₹{self.amount:,.2f} ({self.date})"
