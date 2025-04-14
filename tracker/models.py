@@ -69,6 +69,7 @@ class BudgetPrediction(models.Model):
     month = models.IntegerField(default=1)
     year = models.IntegerField(default=2024)
     confidence_score = models.DecimalField(max_digits=5, decimal_places=2, default=0.0)  # Prediction confidence
+    notes = models.TextField(blank=True, null=True)  # Added notes field
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

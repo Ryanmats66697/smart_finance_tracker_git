@@ -9,7 +9,7 @@ class BudgetAnalyzer:
         self.user = user
         self.today = timezone.now()
         self.start_date = self.today - timedelta(days=180)  # Last 6 months
-        self.min_months_for_prediction = 3  # Minimum months of data required for predictions
+        self.min_months_for_prediction = 1  # Reduced to 1 month to allow initial predictions
 
     def get_category_statistics(self):
         """Calculate statistics for each expense category."""
@@ -94,13 +94,13 @@ class BudgetAnalyzer:
         BudgetRecommendation.objects.filter(user=self.user).delete()
         
         for cat_id, data in stats.items():
-            # Only generate recommendations if we have enough data
-            if data['months_of_data'] < self.min_months_for_prediction:
-                continue
-                
             category = data['category']
             monthly_avg = data['monthly_avg']
             std_dev = data.get('std_dev', 0)
+            months_of_data = data['months_of_data']
+            
+            # Adjust recommendation confidence based on months of data
+            confidence_factor = min(1.0, months_of_data / 6)  # Scale from 0 to 1 based on months of data
             
             # Fixed expenses check
             if category.is_fixed_expense and std_dev > monthly_avg * Decimal('0.1'):
@@ -110,7 +110,8 @@ class BudgetAnalyzer:
                     priority='high',
                     current_amount=monthly_avg,
                     recommended_amount=monthly_avg * Decimal('0.9'),
-                    reason=f"Unexpected variation in fixed expense {category.name}. Consider reviewing and optimizing."
+                    reason=f"Unexpected variation in fixed expense {category.name}. Consider reviewing and optimizing.",
+                    confidence_factor=confidence_factor
                 )
             
             # High variable expenses
@@ -121,11 +122,12 @@ class BudgetAnalyzer:
                     priority='medium',
                     current_amount=monthly_avg,
                     recommended_amount=monthly_avg * Decimal('0.8'),
-                    reason=f"High variable spending in {category.name}. Consider setting a budget limit."
+                    reason=f"High variable spending in {category.name}. Consider setting a budget limit.",
+                    confidence_factor=confidence_factor
                 )
             
-            # Saving opportunities
-            elif std_dev < monthly_avg * Decimal('0.2'):
+            # Saving opportunities - ONLY for variable expenses
+            elif not category.is_fixed_expense and std_dev < monthly_avg * Decimal('0.2'):
                 potential_saving = monthly_avg * Decimal('0.1')
                 self._create_recommendation(
                     category=category,
@@ -133,12 +135,18 @@ class BudgetAnalyzer:
                     priority='low',
                     current_amount=monthly_avg,
                     recommended_amount=monthly_avg - potential_saving,
-                    reason=f"Consistent spending in {category.name}. Potential for {potential_saving:,.2f} monthly savings."
+                    reason=f"Consistent spending in {category.name}. Potential for {potential_saving:,.2f} monthly savings.",
+                    confidence_factor=confidence_factor
                 )
 
-    def _create_recommendation(self, category, rec_type, priority, current_amount, recommended_amount, reason):
+    def _create_recommendation(self, category, rec_type, priority, current_amount, recommended_amount, reason, confidence_factor=1.0):
         """Helper method to create a budget recommendation."""
         potential_savings = current_amount - recommended_amount
+        
+        # Adjust the recommendation based on confidence factor
+        if confidence_factor < 0.5:
+            reason += " (Note: This recommendation is based on limited data and may become more accurate over time.)"
+        
         BudgetRecommendation.objects.create(
             user=self.user,
             category=category,
@@ -162,20 +170,22 @@ class BudgetAnalyzer:
         ).delete()
         
         for cat_id, data in stats.items():
-            # Only make predictions if we have enough data
-            if data['months_of_data'] < self.min_months_for_prediction:
-                continue
-                
             category = data['category']
             monthly_avg = data['monthly_avg']
             std_dev = data.get('std_dev', 0)
+            months_of_data = data['months_of_data']
             
             # Calculate confidence score based on data consistency and amount of data
-            data_confidence = min(100, (data['months_of_data'] / 6) * 100)  # Scale based on months of data
-            consistency_confidence = max(0, min(100, 100 - (std_dev / monthly_avg * 100))) if monthly_avg > 0 else 0
+            data_confidence = min(Decimal('100'), (Decimal(str(months_of_data)) / Decimal('6')) * Decimal('100'))  # Scale based on months of data
+            consistency_confidence = max(Decimal('0'), min(Decimal('100'), Decimal('100') - (std_dev / monthly_avg * Decimal('100')))) if monthly_avg > 0 else Decimal('0')
             
             # Overall confidence is the average of data amount and consistency
-            confidence = (data_confidence + consistency_confidence) / 2
+            confidence = (data_confidence + consistency_confidence) / Decimal('2')
+            
+            # For categories with very little data, add a note about limited data
+            data_note = ""
+            if months_of_data < 3:
+                data_note = " (Based on limited data)"
             
             # Predict next 3 months
             for i in range(1, 4):
@@ -187,13 +197,20 @@ class BudgetAnalyzer:
                     predicted_amount = monthly_avg
                 else:
                     # Add slight increase for variable expenses
-                    predicted_amount = monthly_avg * (1 + Decimal('0.02') * i)  # 2% increase per month
+                    predicted_amount = monthly_avg * (Decimal('1') + Decimal('0.02') * Decimal(str(i)))  # 2% increase per month
                 
-                BudgetPrediction.objects.create(
-                    user=self.user,
-                    category=category,
-                    predicted_amount=predicted_amount,
-                    month=future_month,
-                    year=future_year,
-                    confidence_score=confidence
-                )
+                # Create prediction with or without notes field
+                prediction_data = {
+                    'user': self.user,
+                    'category': category,
+                    'predicted_amount': predicted_amount,
+                    'month': future_month,
+                    'year': future_year,
+                    'confidence_score': confidence,
+                }
+                
+                # Add notes if available
+                if data_note:
+                    prediction_data['notes'] = data_note
+                
+                BudgetPrediction.objects.create(**prediction_data)
