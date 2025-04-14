@@ -2,6 +2,7 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 from django.db.models import Avg, Sum, Count, StdDev, Min, Max
 from django.utils import timezone
+from collections import defaultdict
 from ..models import Expense, Category, BudgetPrediction, BudgetRecommendation
 
 class BudgetAnalyzer:
@@ -45,6 +46,25 @@ class BudgetAnalyzer:
                 count = expenses.count()
                 std_dev = expenses.aggregate(StdDev('amount'))['amount__stddev'] or 0
                 
+                # Group expenses by month to identify variations
+                monthly_expenses = defaultdict(list)
+                for expense in expenses:
+                    month_key = (expense.date.year, expense.date.month)
+                    monthly_expenses[month_key].append(expense.amount)
+                
+                # Calculate monthly totals and identify variations
+                monthly_totals = {}
+                monthly_variations = {}
+                for month_key, amounts in monthly_expenses.items():
+                    month_total = sum(amounts)
+                    monthly_totals[month_key] = month_total
+                    
+                    # Calculate variation from average
+                    if avg > 0:
+                        variation_percent = abs((month_total - avg) / avg * 100)
+                        if variation_percent > 10:  # More than 10% variation
+                            monthly_variations[month_key] = variation_percent
+                
                 stats[category.id] = {
                     'category': category,
                     'average': avg,
@@ -52,7 +72,9 @@ class BudgetAnalyzer:
                     'frequency': count,
                     'std_dev': std_dev,
                     'monthly_avg': total / months_diff,  # Use actual months of data
-                    'months_of_data': months_diff
+                    'months_of_data': months_diff,
+                    'monthly_totals': monthly_totals,
+                    'monthly_variations': monthly_variations
                 }
         
         return stats
@@ -98,19 +120,32 @@ class BudgetAnalyzer:
             monthly_avg = data['monthly_avg']
             std_dev = data.get('std_dev', 0)
             months_of_data = data['months_of_data']
+            monthly_variations = data.get('monthly_variations', {})
             
             # Adjust recommendation confidence based on months of data
             confidence_factor = min(1.0, months_of_data / 6)  # Scale from 0 to 1 based on months of data
             
             # Fixed expenses check
             if category.is_fixed_expense and std_dev > monthly_avg * Decimal('0.1'):
+                # Create a detailed reason with specific months of variation
+                reason = f"Unexpected variation in fixed expense {category.name}. Consider reviewing and optimizing."
+                
+                if monthly_variations:
+                    variation_months = []
+                    for (year, month), variation in monthly_variations.items():
+                        month_name = datetime(year, month, 1).strftime('%B %Y')
+                        variation_months.append(f"{month_name} ({variation:.1f}% variation)")
+                    
+                    if variation_months:
+                        reason += f" Notable variations in: {', '.join(variation_months)}."
+                
                 self._create_recommendation(
                     category=category,
                     rec_type='reduce',
                     priority='high',
                     current_amount=monthly_avg,
                     recommended_amount=monthly_avg * Decimal('0.9'),
-                    reason=f"Unexpected variation in fixed expense {category.name}. Consider reviewing and optimizing.",
+                    reason=reason,
                     confidence_factor=confidence_factor
                 )
             
@@ -174,6 +209,7 @@ class BudgetAnalyzer:
             monthly_avg = data['monthly_avg']
             std_dev = data.get('std_dev', 0)
             months_of_data = data['months_of_data']
+            monthly_variations = data.get('monthly_variations', {})
             
             # Calculate confidence score based on data consistency and amount of data
             data_confidence = min(Decimal('100'), (Decimal(str(months_of_data)) / Decimal('6')) * Decimal('100'))  # Scale based on months of data
@@ -186,6 +222,16 @@ class BudgetAnalyzer:
             data_note = ""
             if months_of_data < 3:
                 data_note = " (Based on limited data)"
+            
+            # For fixed expenses with variations, add a note about specific months
+            if category.is_fixed_expense and monthly_variations:
+                variation_months = []
+                for (year, month), variation in monthly_variations.items():
+                    month_name = datetime(year, month, 1).strftime('%B %Y')
+                    variation_months.append(f"{month_name} ({variation:.1f}% variation)")
+                
+                if variation_months:
+                    data_note = f" (Variations detected in: {', '.join(variation_months)})"
             
             # Predict next 3 months
             for i in range(1, 4):
