@@ -33,6 +33,7 @@ class ExpenseForm(forms.ModelForm):
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
             'description': forms.Textarea(attrs={'rows': 3}),
+            'amount': forms.NumberInput(attrs={'min': '0.01', 'step': '0.01'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -40,6 +41,12 @@ class ExpenseForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if user:
             self.fields['category'].queryset = Category.objects.filter(user=user)
+
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        if amount <= 0:
+            raise forms.ValidationError("Amount must be greater than zero.")
+        return amount
 
 class IncomeForm(forms.ModelForm):
     class Meta:
@@ -49,11 +56,18 @@ class IncomeForm(forms.ModelForm):
             'date': forms.DateInput(attrs={'type': 'date'}),
             'description': forms.Textarea(attrs={'rows': 3}),
             'source': forms.Select(attrs={'class': 'form-select'}),
+            'amount': forms.NumberInput(attrs={'min': '0.01', 'step': '0.01'}),
         }
         help_texts = {
             'source': 'Select the type of income you\'re adding.',
             'description': 'Add any additional details about this income.',
         }
+
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        if amount <= 0:
+            raise forms.ValidationError("Amount must be greater than zero.")
+        return amount
 
 class TaxDeductionForm(forms.ModelForm):
     class Meta:

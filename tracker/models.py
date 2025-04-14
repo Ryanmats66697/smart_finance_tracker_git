@@ -33,7 +33,7 @@ class Category(models.Model):
 class Expense(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     date = models.DateField()
     description = models.TextField(blank=True)
 
@@ -54,7 +54,7 @@ class Income(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     date = models.DateField()
     description = models.TextField(blank=True)
     source = models.CharField(max_length=100, choices=INCOME_SOURCE_CHOICES, default='salary')
